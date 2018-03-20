@@ -115,7 +115,7 @@ Bucket::fresh(BucketManager& bucketManager,
               std::vector<LedgerEntry> const& liveEntries,
               std::vector<LedgerKey> const& deadEntries)
 {
-    std::vector<BucketEntry> live, dead, combined;
+    std::vector<BucketEntry> live, dead;
     live.reserve(liveEntries.size());
     dead.reserve(deadEntries.size());
 
@@ -135,24 +135,46 @@ Bucket::fresh(BucketManager& bucketManager,
         dead.push_back(ce);
     }
 
-    std::sort(live.begin(), live.end(), BucketEntryIdCmp());
+    BucketEntryIdCmp cmp;
+    std::sort(live.begin(), live.end(), cmp);
+    std::sort(dead.begin(), dead.end(), cmp);
+    auto li = live.begin();
+    auto di = dead.begin();
 
-    std::sort(dead.begin(), dead.end(), BucketEntryIdCmp());
-
-    BucketOutputIterator liveOut(bucketManager.getTmpDir(), true);
-    BucketOutputIterator deadOut(bucketManager.getTmpDir(), true);
-    for (auto const& e : live)
+    BucketOutputIterator out(bucketManager.getTmpDir(), true);
+    while (li != live.end() || di != dead.end())
     {
-        liveOut.put(e);
+        if (di == dead.end())
+        {
+            // Out of new entries, take old entries.
+            out.put(*li);
+            ++li;
+        }
+        else if (li == live.end())
+        {
+            // Out of old entries, take new entries.
+            out.put(*di);
+            ++di;
+        }
+        else if (cmp(*li, *di))
+        {
+            // Next old-entry has smaller key, take it.
+            out.put(*li);
+            ++li;
+        }
+        else if (cmp(*di, *li))
+        {
+            // Next new-entry has smaller key, take it.
+            out.put(*di);
+            ++di;
+        }
+        else
+        {
+            // Old and new are for the same key, abort.
+            abort();
+        }
     }
-    for (auto const& e : dead)
-    {
-        deadOut.put(e);
-    }
-
-    auto liveBucket = liveOut.getBucket(bucketManager);
-    auto deadBucket = deadOut.getBucket(bucketManager);
-    return Bucket::merge(bucketManager, liveBucket, deadBucket);
+    return out.getBucket(bucketManager);
 }
 
 inline void
