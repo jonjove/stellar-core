@@ -141,40 +141,47 @@ Bucket::fresh(BucketManager& bucketManager,
     auto li = live.begin();
     auto di = dead.begin();
 
-    BucketOutputIterator out(bucketManager.getTmpDir(), true);
-    while (li != live.end() || di != dead.end())
+    if (live.empty() && dead.empty())
     {
-        if (di == dead.end())
-        {
-            // Out of new entries, take old entries.
-            out.put(*li);
-            ++li;
-        }
-        else if (li == live.end())
-        {
-            // Out of old entries, take new entries.
-            out.put(*di);
-            ++di;
-        }
-        else if (cmp(*li, *di))
-        {
-            // Next old-entry has smaller key, take it.
-            out.put(*li);
-            ++li;
-        }
-        else if (cmp(*di, *li))
-        {
-            // Next new-entry has smaller key, take it.
-            out.put(*di);
-            ++di;
-        }
-        else
-        {
-            // Old and new are for the same key, abort.
-            abort();
-        }
+        return std::make_shared<Bucket>();
     }
-    return out.getBucket(bucketManager);
+    else
+    {
+        BucketOutputIterator out(bucketManager.getTmpDir(), true);
+        while (li != live.end() || di != dead.end())
+        {
+            if (di == dead.end())
+            {
+                // Out of new entries, take old entries.
+                out.put(*li);
+                ++li;
+            }
+            else if (li == live.end())
+            {
+                // Out of old entries, take new entries.
+                out.put(*di);
+                ++di;
+            }
+            else if (cmp(*li, *di))
+            {
+                // Next old-entry has smaller key, take it.
+                out.put(*li);
+                ++li;
+            }
+            else if (cmp(*di, *li))
+            {
+                // Next new-entry has smaller key, take it.
+                out.put(*di);
+                ++di;
+            }
+            else
+            {
+                // Old and new are for the same key, abort.
+                abort();
+            }
+        }
+        return out.getBucket(bucketManager);
+    }
 }
 
 inline void
@@ -225,45 +232,52 @@ Bucket::merge(BucketManager& bucketManager,
     std::vector<BucketInputIterator> shadowIterators(shadows.begin(),
                                                      shadows.end());
 
-    auto timer = bucketManager.getMergeTimer().TimeScope();
-    BucketOutputIterator out(bucketManager.getTmpDir(), keepDeadEntries);
-
-    BucketEntryIdCmp cmp;
-    while (oi || ni)
+    if (!oi && !ni)
     {
-        if (!ni)
-        {
-            // Out of new entries, take old entries.
-            maybePut(out, *oi, shadowIterators);
-            ++oi;
-        }
-        else if (!oi)
-        {
-            // Out of old entries, take new entries.
-            maybePut(out, *ni, shadowIterators);
-            ++ni;
-        }
-        else if (cmp(*oi, *ni))
-        {
-            // Next old-entry has smaller key, take it.
-            maybePut(out, *oi, shadowIterators);
-            ++oi;
-        }
-        else if (cmp(*ni, *oi))
-        {
-            // Next new-entry has smaller key, take it.
-            maybePut(out, *ni, shadowIterators);
-            ++ni;
-        }
-        else
-        {
-            // Old and new are for the same key, take new.
-            maybePut(out, *ni, shadowIterators);
-            ++oi;
-            ++ni;
-        }
+        return std::make_shared<Bucket>();
     }
-    return out.getBucket(bucketManager);
+    else
+    {
+        auto timer = bucketManager.getMergeTimer().TimeScope();
+        BucketOutputIterator out(bucketManager.getTmpDir(), keepDeadEntries);
+
+        BucketEntryIdCmp cmp;
+        while (oi || ni)
+        {
+            if (!ni)
+            {
+                // Out of new entries, take old entries.
+                maybePut(out, *oi, shadowIterators);
+                ++oi;
+            }
+            else if (!oi)
+            {
+                // Out of old entries, take new entries.
+                maybePut(out, *ni, shadowIterators);
+                ++ni;
+            }
+            else if (cmp(*oi, *ni))
+            {
+                // Next old-entry has smaller key, take it.
+                maybePut(out, *oi, shadowIterators);
+                ++oi;
+            }
+            else if (cmp(*ni, *oi))
+            {
+                // Next new-entry has smaller key, take it.
+                maybePut(out, *ni, shadowIterators);
+                ++ni;
+            }
+            else
+            {
+                // Old and new are for the same key, take new.
+                maybePut(out, *ni, shadowIterators);
+                ++oi;
+                ++ni;
+            }
+        }
+        return out.getBucket(bucketManager);
+    }
 }
 
 static void
