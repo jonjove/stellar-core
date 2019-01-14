@@ -2173,3 +2173,208 @@ TEST_CASE("Signers performance benchmark", "[!hide][signersbench]")
     }
 #endif
 }
+
+void testBulkLoad(LedgerEntryType let, Config::TestDbMode dbMode)
+{
+    std::map<LedgerEntryType, std::string> names{
+        {ACCOUNT, "account"}, {TRUSTLINE, "trustline"}, {OFFER, "offer"},
+        {DATA, "data"}};
+    std::string letStr = names[let];
+
+    auto getTimeScope = [letStr](Application& app, std::string const& phase) {
+        return app.getMetrics().NewTimer({"load", letStr, phase}).TimeScope();
+    };
+
+    auto getTimeSpent = [letStr](Application& app, std::string const& phase) {
+        auto time = app.getMetrics().NewTimer({"load", letStr, phase}).sum();
+        return letStr + "-" + phase + ": " + std::to_string(time) + " ms";
+    };
+
+    auto generateEntries = [let](size_t numEntries) {
+        std::vector<LedgerEntry> entries;
+        entries.reserve(numEntries);
+        for (size_t i = 0; i < numEntries; ++i)
+        {
+            LedgerEntry le;
+            le.lastModifiedLedgerSeq = 1;
+            le.data.type(let);
+            switch (let)
+            {
+            case ACCOUNT:
+            {
+                le.data.account() = LedgerTestUtils::generateValidAccountEntry();
+
+                size_t const NUM_SIGNERS = 10;
+                auto& signers = le.data.account().signers;
+                if (signers.size() > NUM_SIGNERS)
+                {
+                    signers.resize(NUM_SIGNERS);
+                }
+                else if (signers.size() < NUM_SIGNERS)
+                {
+                    signers.reserve(NUM_SIGNERS);
+                    std::generate_n(std::back_inserter(signers),
+                                    NUM_SIGNERS - signers.size(),
+                                    std::bind(autocheck::generator<Signer>(), 5));
+                    std::sort(signers.begin(), signers.end(),
+                              [](Signer const& lhs, Signer const& rhs) {
+                                  return lhs.key < rhs.key;
+                              });
+                }
+                break;
+            }
+            case TRUSTLINE:
+                le.data.trustLine() = LedgerTestUtils::generateValidTrustLineEntry();
+                break;
+            case OFFER:
+                le.data.offer() = LedgerTestUtils::generateValidOfferEntry();
+                break;
+            case DATA:
+                le.data.data() = LedgerTestUtils::generateValidDataEntry();
+                break;
+            default:
+                std::abort();
+            }
+            entries.emplace_back(le);
+        }
+        return entries;
+    };
+
+    auto generateKey = [let]() {
+        LedgerKey key(let);
+        switch (let)
+        {
+        case ACCOUNT:
+            key.account().accountID = autocheck::generator<AccountID>()(5);
+            break;
+        case TRUSTLINE:
+        {
+            auto& tlKey = key.trustLine();
+            tlKey.accountID = autocheck::generator<AccountID>()(5);
+            while (tlKey.asset.type() == ASSET_TYPE_NATIVE)
+            {
+                tlKey.asset = autocheck::generator<Asset>()(5);
+            }
+            break;
+        }
+        case OFFER:
+            key.offer() = autocheck::generator<LedgerKey::_offer_t>()(5);
+            break;
+        case DATA:
+            key.data() = autocheck::generator<LedgerKey::_data_t>()(5);
+            break;
+        default:
+            std::abort();
+        }
+        return key;
+    };
+
+    auto verify = [](std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>> const& res,
+                     std::map<LedgerKey, LedgerEntry> const& entriesByKey) {
+        size_t loaded = 0;
+        for (auto const& kv : res)
+        {
+            auto iter = entriesByKey.find(kv.first);
+            if (iter != entriesByKey.end())
+            {
+                if (kv.second)
+                {
+                    ++loaded;
+                    REQUIRE(*kv.second == iter->second);
+                }
+            }
+        }
+        REQUIRE(loaded == entriesByKey.size());
+    };
+
+    VirtualClock clock;
+    Config cfg(getTestConfig(0, dbMode));
+    cfg.ENTRY_CACHE_SIZE = 0;
+    cfg.BEST_OFFERS_CACHE_SIZE = 0;
+    auto app = createTestApplication(clock, cfg);
+    app->start();
+
+    std::vector<LedgerEntry> entries;
+    std::map<LedgerKey, LedgerEntry> entriesByKey;
+    std::vector<LedgerKey> keysToLoad;
+    {
+        auto ts = getTimeScope(*app, "generate");
+        entries = generateEntries(1000);
+        for (auto const& entry : entries)
+        {
+            entriesByKey.emplace(LedgerEntryKey(entry), entry);
+            keysToLoad.emplace_back(LedgerEntryKey(entry));
+            keysToLoad.emplace_back(generateKey());
+        }
+    }
+
+    {
+        auto ts = getTimeScope(*app, "create");
+        LedgerTxn ltx(app->getLedgerTxnRoot());
+        for (auto const& le : entries)
+        {
+            ltx.create(le);
+        }
+        ltx.commit();
+    }
+
+    SECTION("bulk")
+    {
+        std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>> res;
+        {
+            auto ts = getTimeScope(*app, "load");
+            LedgerTxnRoot& root = app->getLedgerTxnRoot();
+            res = root.getNewestVersion(keysToLoad);
+        }
+
+        REQUIRE(res.size() == keysToLoad.size());
+        verify(res, entriesByKey);
+
+        CLOG(WARNING, "Ledger")
+            << "Bulk (" << getTimeSpent(*app, "generate") << ", "
+            << getTimeSpent(*app, "create") << ", "
+            << getTimeSpent(*app, "load") << ")";
+    }
+
+    SECTION("non bulk")
+    {
+        std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>> res;
+        {
+            auto ts = getTimeScope(*app, "load");
+            LedgerTxnRoot& root = app->getLedgerTxnRoot();
+            for (auto const& key : keysToLoad)
+            {
+                res[key] = root.getNewestVersion(key);
+            }
+        }
+
+        REQUIRE(res.size() == keysToLoad.size());
+        verify(res, entriesByKey);
+
+        CLOG(WARNING, "Ledger")
+            << "Non-bulk (" << getTimeSpent(*app, "generate") << ", "
+            << getTimeSpent(*app, "create") << ", "
+            << getTimeSpent(*app, "load") << ")";
+    }
+}
+
+// TODO(jonjove): FOR TESTING ONLY
+TEST_CASE("Load bench", "[ledgertxn][loadbench]")
+{
+    SECTION("account")
+    {
+        testBulkLoad(ACCOUNT, Config::TESTDB_ON_DISK_SQLITE);
+    }
+    SECTION("trustline")
+    {
+        testBulkLoad(TRUSTLINE, Config::TESTDB_ON_DISK_SQLITE);
+    }
+    SECTION("offer")
+    {
+        testBulkLoad(OFFER, Config::TESTDB_ON_DISK_SQLITE);
+    }
+    SECTION("data")
+    {
+        testBulkLoad(DATA, Config::TESTDB_ON_DISK_SQLITE);
+    }
+}

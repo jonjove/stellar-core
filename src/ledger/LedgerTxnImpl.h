@@ -413,6 +413,10 @@ class LedgerTxnRoot::Impl
     std::shared_ptr<LedgerEntry const>
     getNewestVersion(LedgerKey const& key) const;
 
+    // TODO(jonjove): FOR TESTING ONLY
+    std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>>
+    getNewestVersion(std::vector<LedgerKey> const& key);
+
     // rollbackChild has the strong exception safety guarantee.
     void rollbackChild();
 
@@ -421,5 +425,15 @@ class LedgerTxnRoot::Impl
     // - the prepared statement cache may be, but is not guaranteed to be,
     //   modified
     void writeSignersTableIntoAccountsTable();
+
+    // TODO(jonjove): SHOULD BE PRIVATE
+    std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>>
+    bulkLoadAccounts(std::vector<LedgerKey> const& keys);
+    std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>>
+    bulkLoadTrustLines(std::vector<LedgerKey> const& keys);
+    std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>>
+    bulkLoadOffers(std::vector<LedgerKey> const& keys);
+    std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>>
+    bulkLoadData(std::vector<LedgerKey> const& keys);
 };
 }

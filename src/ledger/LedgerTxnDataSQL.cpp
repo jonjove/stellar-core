@@ -6,7 +6,9 @@
 #include "crypto/SecretKey.h"
 #include "database/Database.h"
 #include "ledger/LedgerTxnImpl.h"
+#include "ledger/SqliteUtils.h"
 #include "util/Decoder.h"
+#include "util/types.h"
 
 namespace stellar
 {
@@ -126,5 +128,120 @@ LedgerTxnRoot::Impl::dropData()
                               "lastmodified INT          NOT NULL,"
                               "PRIMARY KEY  (accountid, dataname)"
                               ");";
+}
+
+static LedgerEntry
+sqliteFetchData(sqlite3_stmt* st)
+{
+    LedgerEntry le;
+    le.data.type(DATA);
+    auto& de = le.data.data();
+
+    sqliteRead(st, de.accountID, 0);
+    sqliteRead(st, de.dataName, 1);
+
+    std::string dataValue;
+    sqliteRead(st, dataValue, 2);
+    decoder::decode_b64(dataValue, de.dataValue);
+
+    sqliteRead(st, le.lastModifiedLedgerSeq, 3);
+
+    return le;
+}
+
+static std::vector<LedgerEntry>
+sociGenericBulkLoadData(
+    Database& db, std::vector<std::string> const& accountIDs,
+    std::vector<std::string> const& dataNames)
+{
+    assert(accountIDs.size() == dataNames.size());
+
+    std::vector<const char*> cstrAccountIDs;
+    std::vector<const char*> cstrDataNames;
+    cstrAccountIDs.reserve(accountIDs.size());
+    cstrDataNames.reserve(dataNames.size());
+    for (size_t i = 0; i < accountIDs.size(); ++i)
+    {
+        cstrAccountIDs.emplace_back(accountIDs[i].c_str());
+        cstrDataNames.emplace_back(dataNames[i].c_str());
+    }
+
+    std::string sqlJoin =
+        "SELECT x.value, y.value FROM "
+        "(SELECT rowid, value FROM carray(?, ?, 'char*')) AS x "
+        "INNER JOIN (SELECT rowid, value FROM carray(?, ?, 'char*')) AS y ON x.rowid = y.rowid";
+    std::string sql = "WITH r AS (" + sqlJoin +
+        ") SELECT accountid, dataname, datavalue, lastmodified "
+        "FROM accountdata WHERE (accountid, dataname) IN r";
+
+    auto prep = db.getPreparedStatement(sql);
+    auto sqliteStatement = dynamic_cast<soci::sqlite3_statement_backend*>(prep.statement().get_backend());
+    auto st = sqliteStatement->stmt_;
+
+    sqlite3_reset(st);
+    sqlite3_bind_pointer(st, 1, cstrAccountIDs.data(), "carray", 0);
+    sqlite3_bind_int(st, 2, cstrAccountIDs.size());
+    sqlite3_bind_pointer(st, 3, cstrDataNames.data(), "carray", 0);
+    sqlite3_bind_int(st, 4, cstrDataNames.size());
+
+    std::vector<LedgerEntry> res;
+    while (true)
+    {
+        int stepRes = sqlite3_step(st);
+        if (stepRes == SQLITE_DONE)
+        {
+            break;
+        }
+        else if (stepRes == SQLITE_ROW)
+        {
+            res.emplace_back(sqliteFetchData(st));
+        }
+        else
+        {
+            // TODO(jonjove): What to do?
+            std::abort();
+        }
+    }
+    return res;
+}
+
+std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>>
+LedgerTxnRoot::Impl::bulkLoadData(std::vector<LedgerKey> const& keys)
+{
+    std::vector<std::string> accountIDs;
+    std::vector<std::string> dataNames;
+    accountIDs.reserve(keys.size());
+    for (auto const& k : keys)
+    {
+        assert(k.type() == DATA);
+        accountIDs.emplace_back(KeyUtils::toStrKey(k.data().accountID));
+        dataNames.emplace_back(k.data().dataName);
+    }
+
+    std::vector<LedgerEntry> entries;
+    if (mDatabase.isSqlite())
+    {
+        entries = sociGenericBulkLoadData(mDatabase, accountIDs, dataNames);
+    }
+    else
+    {
+        std::abort();
+        //postgresSpecificBulkLoadAccounts(mDatabase, accountIDs);
+    }
+
+    std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>> res;
+    for (auto const& le : entries)
+    {
+        res.emplace(LedgerEntryKey(le),
+                    std::make_shared<LedgerEntry const>(le));
+    }
+    for (auto const& key : keys)
+    {
+        if (res.find(key) == res.end())
+        {
+            res.emplace(key, nullptr);
+        }
+    }
+    return res;
 }
 }
