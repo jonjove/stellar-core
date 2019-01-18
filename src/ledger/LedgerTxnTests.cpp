@@ -2241,32 +2241,26 @@ void testBulkLoad(LedgerEntryType let, Config::TestDbMode dbMode)
     };
 
     auto generateKey = [let]() {
-        LedgerKey key(let);
+        LedgerEntry le;
+        le.data.type(let);
         switch (let)
         {
         case ACCOUNT:
-            key.account().accountID = autocheck::generator<AccountID>()(5);
+            le.data.account() = LedgerTestUtils::generateValidAccountEntry();
             break;
         case TRUSTLINE:
-        {
-            auto& tlKey = key.trustLine();
-            tlKey.accountID = autocheck::generator<AccountID>()(5);
-            while (tlKey.asset.type() == ASSET_TYPE_NATIVE)
-            {
-                tlKey.asset = autocheck::generator<Asset>()(5);
-            }
+            le.data.trustLine() = LedgerTestUtils::generateValidTrustLineEntry();
             break;
-        }
         case OFFER:
-            key.offer() = autocheck::generator<LedgerKey::_offer_t>()(5);
+            le.data.offer() = LedgerTestUtils::generateValidOfferEntry();
             break;
         case DATA:
-            key.data() = autocheck::generator<LedgerKey::_data_t>()(5);
+            le.data.data() = LedgerTestUtils::generateValidDataEntry();
             break;
         default:
             std::abort();
         }
-        return key;
+        return LedgerEntryKey(le);
     };
 
     auto verify = [](std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>> const& res,
@@ -2363,18 +2357,18 @@ TEST_CASE("Load bench", "[ledgertxn][loadbench]")
 {
     SECTION("account")
     {
-        testBulkLoad(ACCOUNT, Config::TESTDB_ON_DISK_SQLITE);
+        testBulkLoad(ACCOUNT, Config::TESTDB_POSTGRESQL);
     }
     SECTION("trustline")
     {
-        testBulkLoad(TRUSTLINE, Config::TESTDB_ON_DISK_SQLITE);
+        testBulkLoad(TRUSTLINE, Config::TESTDB_POSTGRESQL);
     }
     SECTION("offer")
     {
-        testBulkLoad(OFFER, Config::TESTDB_ON_DISK_SQLITE);
+        testBulkLoad(OFFER, Config::TESTDB_POSTGRESQL);
     }
     SECTION("data")
     {
-        testBulkLoad(DATA, Config::TESTDB_ON_DISK_SQLITE);
+        testBulkLoad(DATA, Config::TESTDB_POSTGRESQL);
     }
 }

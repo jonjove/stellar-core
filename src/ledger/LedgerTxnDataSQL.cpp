@@ -205,6 +205,59 @@ sociGenericBulkLoadData(
     return res;
 }
 
+static std::vector<LedgerEntry>
+postgresSpecificBulkLoadData(
+    Database& db, std::vector<std::string> const& accountIDs,
+    std::vector<std::string> const& dataNames)
+{
+    assert(accountIDs.size() == dataNames.size());
+
+    std::string accountID, dataName, dataValue;
+    uint32_t lastModified;
+
+    std::string strAccountIDs;
+    std::string strDataNames;
+    auto pg = dynamic_cast<soci::postgresql_session_backend*>(db.getSession().get_backend());
+    marshalToPGArray(pg->conn_, strAccountIDs, accountIDs);
+    marshalToPGArray(pg->conn_, strDataNames, dataNames);
+
+    std::string sql =
+        "WITH r AS (SELECT unnest(:v1::TEXT[]), unnest(:v2::TEXT[])) "
+        "SELECT accountid, dataname, datavalue, lastmodified "
+        "FROM accountdata WHERE (accountid, dataname) IN (SELECT * FROM r)";
+
+    auto prep = db.getPreparedStatement(sql);
+    auto& st = prep.statement();
+    st.exchange(soci::use(strAccountIDs));
+    st.exchange(soci::use(strDataNames));
+    st.exchange(soci::into(accountID));
+    st.exchange(soci::into(dataName));
+    st.exchange(soci::into(dataValue));
+    st.exchange(soci::into(lastModified));
+    st.define_and_bind();
+    {
+        auto timer = db.getSelectTimer("data");
+        st.execute(true);
+    }
+
+    std::vector<LedgerEntry> res;
+    while (st.got_data())
+    {
+        res.emplace_back();
+        auto& le = res.back();
+        le.data.type(DATA);
+        auto& de = le.data.data();
+
+        de.accountID = KeyUtils::fromStrKey<PublicKey>(accountID);
+        de.dataName = dataName;
+        decoder::decode_b64(dataValue, de.dataValue);
+        le.lastModifiedLedgerSeq = lastModified;
+
+        st.fetch();
+    }
+    return res;
+}
+
 std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>>
 LedgerTxnRoot::Impl::bulkLoadData(std::vector<LedgerKey> const& keys)
 {
@@ -225,8 +278,7 @@ LedgerTxnRoot::Impl::bulkLoadData(std::vector<LedgerKey> const& keys)
     }
     else
     {
-        std::abort();
-        //postgresSpecificBulkLoadAccounts(mDatabase, accountIDs);
+        entries = postgresSpecificBulkLoadData(mDatabase, accountIDs, dataNames);
     }
 
     std::unordered_map<LedgerKey, std::shared_ptr<LedgerEntry const>> res;
