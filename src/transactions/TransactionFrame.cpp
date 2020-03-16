@@ -311,7 +311,7 @@ TransactionFrame::isTooLate(LedgerTxnHeader const& header) const
 }
 
 bool
-TransactionFrame::commonValidPreSeqNum(AbstractLedgerTxn& ltx, bool forApply)
+TransactionFrame::commonValidPreSeqNum(AbstractLedgerTxn& ltx, bool chargeFee)
 {
     // this function does validations that are independent of the account state
     //    (stay true regardless of other side effects)
@@ -341,7 +341,12 @@ TransactionFrame::commonValidPreSeqNum(AbstractLedgerTxn& ltx, bool forApply)
         return false;
     }
 
-    if (getFeeBid() < getMinFee(header.current()))
+    if (chargeFee && getFeeBid() < getMinFee(header.current()))
+    {
+        getResult().result.code(txINSUFFICIENT_FEE);
+        return false;
+    }
+    if (!chargeFee && getFeeBid() < 0)
     {
         getResult().result.code(txINSUFFICIENT_FEE);
         return false;
@@ -418,12 +423,13 @@ TransactionFrame::isBadSeq(int64_t seqNum) const
 TransactionFrame::ValidationType
 TransactionFrame::commonValid(SignatureChecker& signatureChecker,
                               AbstractLedgerTxn& ltxOuter,
-                              SequenceNumber current, bool applying)
+                              SequenceNumber current, bool applying,
+                              bool chargeFee)
 {
     LedgerTxn ltx(ltxOuter);
     ValidationType res = ValidationType::kInvalid;
 
-    if (!commonValidPreSeqNum(ltx, applying))
+    if (!commonValidPreSeqNum(ltx, chargeFee))
     {
         return res;
     }
@@ -465,7 +471,7 @@ TransactionFrame::commonValid(SignatureChecker& signatureChecker,
         (applying && (header.current().ledgerVersion > 8)) ? 0 : getFeeBid();
     // don't let the account go below the reserve after accounting for
     // liabilities
-    if (getAvailableBalance(header, sourceAccount) < feeToPay)
+    if (chargeFee && getAvailableBalance(header, sourceAccount) < feeToPay)
     {
         getResult().result.code(txINSUFFICIENT_BALANCE);
         return res;
@@ -568,18 +574,18 @@ TransactionFrame::removeAccountSigner(LedgerTxnHeader const& header,
 
 bool
 TransactionFrame::checkValid(AbstractLedgerTxn& ltxOuter,
-                             SequenceNumber current)
+                             SequenceNumber current, bool chargeFee)
 {
     mCachedAccount.reset();
 
     LedgerTxn ltx(ltxOuter);
-    auto minBaseFee = ltx.loadHeader().current().baseFee;
+    int64_t minBaseFee = chargeFee ? ltx.loadHeader().current().baseFee : 0;
     resetResults(ltx.loadHeader().current(), minBaseFee);
 
     SignatureChecker signatureChecker{ltx.loadHeader().current().ledgerVersion,
                                       getContentsHash(),
                                       getSignatures(mEnvelope)};
-    bool res = commonValid(signatureChecker, ltx, current, false) ==
+    bool res = commonValid(signatureChecker, ltx, current, false, chargeFee) ==
                ValidationType::kFullyValid;
     if (res)
     {
@@ -602,6 +608,13 @@ TransactionFrame::checkValid(AbstractLedgerTxn& ltxOuter,
         }
     }
     return res;
+}
+
+bool
+TransactionFrame::checkValid(AbstractLedgerTxn& ltxOuter,
+                             SequenceNumber current)
+{
+    return checkValid(ltxOuter, current, true);
 }
 
 void
@@ -728,7 +741,7 @@ TransactionFrame::applyOperations(SignatureChecker& signatureChecker,
 
 bool
 TransactionFrame::apply(Application& app, AbstractLedgerTxn& ltx,
-                        TransactionMeta& meta)
+                        TransactionMeta& meta, bool chargeFee)
 {
     mCachedAccount.reset();
     SignatureChecker signatureChecker{ltx.loadHeader().current().ledgerVersion,
@@ -741,7 +754,7 @@ TransactionFrame::apply(Application& app, AbstractLedgerTxn& ltx,
         // when applying, a failure during tx validation means that
         // we'll skip trying to apply operations but we'll still
         // process the sequence number if needed
-        auto cv = commonValid(signatureChecker, ltxTx, 0, true);
+        auto cv = commonValid(signatureChecker, ltxTx, 0, true, chargeFee);
         if (cv >= ValidationType::kInvalidUpdateSeqNum)
         {
             processSeqNum(ltxTx);
@@ -756,6 +769,13 @@ TransactionFrame::apply(Application& app, AbstractLedgerTxn& ltx,
         valid = signaturesValid && (cv == ValidationType::kFullyValid);
     }
     return valid && applyOperations(signatureChecker, app, ltx, meta);
+}
+
+bool
+TransactionFrame::apply(Application& app, AbstractLedgerTxn& ltx,
+                        TransactionMeta& meta)
+{
+    return apply(app, ltx, meta, true);
 }
 
 StellarMessage
