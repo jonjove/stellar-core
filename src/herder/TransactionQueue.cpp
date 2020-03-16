@@ -7,6 +7,7 @@
 #include "ledger/LedgerManager.h"
 #include "ledger/LedgerTxn.h"
 #include "main/Application.h"
+#include "transactions/TransactionBridge.h"
 #include "transactions/TransactionUtils.h"
 #include "util/HashOfHash.h"
 #include "util/XDROperators.h"
@@ -26,6 +27,9 @@ TransactionQueue::TransactionQueue(Application& app, int pendingDepth,
     : mApp(app)
     , mPendingDepth(pendingDepth)
     , mBannedTransactions(banDepth)
+    , mLedgerVersion(app.getLedgerManager()
+                         .getLastClosedLedgerHeader()
+                         .header.ledgerVersion)
     , mPoolLedgerMultiplier(poolLedgerMultiplier)
 {
     for (auto i = 0; i < pendingDepth; i++)
@@ -416,6 +420,36 @@ TransactionQueue::toTxSet(LedgerHeaderHistoryEntry const& lcl) const
     }
 
     return result;
+}
+
+std::vector<TransactionQueue::ReplacedTransaction>
+TransactionQueue::maybeVersionUpgraded()
+{
+    std::vector<ReplacedTransaction> res;
+
+    auto const& lcl = mApp.getLedgerManager().getLastClosedLedgerHeader();
+    if (mLedgerVersion < 13 && lcl.header.ledgerVersion >= 13)
+    {
+        for (auto& banned : mBannedTransactions)
+        {
+            banned.clear();
+        }
+
+        for (auto& kv : mPendingTransactions)
+        {
+            for (auto& txFrame : kv.second.mTransactions)
+            {
+                auto oldTxFrame = txFrame;
+                auto envV1 = txbridge::convertToV1(txFrame->getEnvelope());
+                txFrame = TransactionFrame::makeTransactionFromWire(
+                    mApp.getNetworkID(), envV1);
+                res.emplace_back(ReplacedTransaction{oldTxFrame, txFrame});
+            }
+        }
+    }
+    mLedgerVersion = lcl.header.ledgerVersion;
+
+    return res;
 }
 
 bool
