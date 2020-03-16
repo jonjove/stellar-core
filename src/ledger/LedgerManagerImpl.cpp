@@ -16,8 +16,6 @@
 #include "herder/TxSetFrame.h"
 #include "herder/Upgrades.h"
 #include "history/HistoryManager.h"
-#include "invariant/InvariantDoesNotHold.h"
-#include "invariant/InvariantManager.h"
 #include "ledger/LedgerHeaderUtils.h"
 #include "ledger/LedgerRange.h"
 #include "ledger/LedgerTxn.h"
@@ -914,36 +912,17 @@ LedgerManagerImpl::applyTransactions(
     {
         auto txTime = mTransactionApply.TimeScope();
         TransactionMeta tm(mApp.getConfig().SUPPORTED_META_VERSION);
-        try
+        CLOG(DEBUG, "Tx") << " tx#" << index << " = "
+                          << hexAbbrev(tx->getFullHash())
+                          << " ops=" << tx->getNumOperations()
+                          << " txseq=" << tx->getSeqNum() << " (@ "
+                          << mApp.getConfig().toShortString(tx->getSourceID())
+                          << ")";
+        tx->apply(mApp, ltx, tm);
+
+        if (tx->getResultCode() == txINTERNAL_ERROR)
         {
-            CLOG(DEBUG, "Tx")
-                << " tx#" << index << " = " << hexAbbrev(tx->getFullHash())
-                << " ops=" << tx->getNumOperations()
-                << " txseq=" << tx->getSeqNum() << " (@ "
-                << mApp.getConfig().toShortString(tx->getSourceID()) << ")";
-            tx->apply(mApp, ltx, tm);
-        }
-        catch (InvariantDoesNotHold&)
-        {
-            CLOG(ERROR, "Ledger")
-                << "Invariant failure during tx->apply for tx "
-                << tx->getFullHash();
-            throw;
-        }
-        catch (std::runtime_error& e)
-        {
-            CLOG(ERROR, "Ledger") << "Exception during tx->apply for tx "
-                                  << tx->getFullHash() << " : " << e.what();
             mInternalErrorCount.inc();
-            tx->getResult().result.code(txINTERNAL_ERROR);
-        }
-        catch (...)
-        {
-            CLOG(ERROR, "Ledger")
-                << "Unknown exception during tx->apply for tx "
-                << tx->getFullHash();
-            mInternalErrorCount.inc();
-            tx->getResult().result.code(txINTERNAL_ERROR);
         }
 
         TransactionResultPair results;
