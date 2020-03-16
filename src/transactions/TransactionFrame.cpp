@@ -112,6 +112,12 @@ TransactionFrame::getSeqNum() const
 }
 
 AccountID
+TransactionFrame::getFeeSourceID() const
+{
+    return getSourceID();
+}
+
+AccountID
 TransactionFrame::getSourceID() const
 {
     if (mEnvelope.type() == ENVELOPE_TYPE_TX_V0)
@@ -131,7 +137,7 @@ TransactionFrame::getNumOperations() const
                : static_cast<uint32_t>(mEnvelope.v1().tx.operations.size());
 }
 
-uint32_t
+int64_t
 TransactionFrame::getFeeBid() const
 {
     return mEnvelope.type() == ENVELOPE_TYPE_TX_V0 ? mEnvelope.v0().tx.fee
@@ -604,6 +610,27 @@ TransactionFrame::checkValid(AbstractLedgerTxn& ltxOuter,
         }
     }
     return res;
+}
+
+void
+TransactionFrame::insertKeysForFeeProcessing(
+    std::unordered_set<LedgerKey>& keys) const
+{
+    keys.emplace(accountKey(getSourceID()));
+}
+
+void
+TransactionFrame::insertKeysForTxApply(
+    std::unordered_set<LedgerKey>& keys) const
+{
+    for (auto const& op : mOperations)
+    {
+        if (!(getSourceID() == op->getSourceID()))
+        {
+            keys.emplace(accountKey(op->getSourceID()));
+        }
+        op->insertLedgerKeysToPrefetch(keys);
+    }
 }
 
 void
