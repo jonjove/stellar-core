@@ -601,7 +601,7 @@ LedgerManagerImpl::closeLedger(LedgerCloseData const& ledgerData)
     // the transaction set that was agreed upon by consensus
     // was sorted by hash; we reorder it so that transactions are
     // sorted such that sequence numbers are respected
-    vector<TransactionFramePtr> txs = ledgerData.getTxSet()->sortForApply();
+    vector<TransactionFrameBasePtr> txs = ledgerData.getTxSet()->sortForApply();
 
     // first, prefetch source accounts fot txset, then charge fees
     prefetchTxSourceIds(txs);
@@ -806,7 +806,7 @@ LedgerManagerImpl::advanceLedgerPointers(LedgerHeader const& header)
 
 void
 LedgerManagerImpl::processFeesSeqNums(
-    std::vector<TransactionFramePtr>& txs, AbstractLedgerTxn& ltxOuter,
+    std::vector<TransactionFrameBasePtr>& txs, AbstractLedgerTxn& ltxOuter,
     int64_t baseFee, std::unique_ptr<LedgerCloseMeta> const& ledgerCloseMeta)
 {
     CLOG(DEBUG, "Ledger")
@@ -853,7 +853,8 @@ LedgerManagerImpl::processFeesSeqNums(
 }
 
 void
-LedgerManagerImpl::prefetchTxSourceIds(std::vector<TransactionFramePtr>& txs)
+LedgerManagerImpl::prefetchTxSourceIds(
+    std::vector<TransactionFrameBasePtr>& txs)
 {
     if (mApp.getConfig().PREFETCH_BATCH_SIZE > 0)
     {
@@ -868,7 +869,7 @@ LedgerManagerImpl::prefetchTxSourceIds(std::vector<TransactionFramePtr>& txs)
 
 void
 LedgerManagerImpl::prefetchTransactionData(
-    std::vector<TransactionFramePtr>& txs)
+    std::vector<TransactionFrameBasePtr>& txs)
 {
     if (mApp.getConfig().PREFETCH_BATCH_SIZE > 0)
     {
@@ -883,7 +884,7 @@ LedgerManagerImpl::prefetchTransactionData(
 
 void
 LedgerManagerImpl::applyTransactions(
-    std::vector<TransactionFramePtr>& txs, AbstractLedgerTxn& ltx,
+    std::vector<TransactionFrameBasePtr>& txs, AbstractLedgerTxn& ltx,
     TransactionResultSet& txResultSet,
     std::unique_ptr<LedgerCloseMeta> const& ledgerCloseMeta)
 {
@@ -895,10 +896,11 @@ LedgerManagerImpl::applyTransactions(
     if (numTxs > 0)
     {
         mTransactionCount.Update(static_cast<int64_t>(numTxs));
-        numOps = std::accumulate(txs.begin(), txs.end(), size_t(0),
-                                 [](size_t s, TransactionFramePtr const& v) {
-                                     return s + v->getNumOperations();
-                                 });
+        numOps =
+            std::accumulate(txs.begin(), txs.end(), size_t(0),
+                            [](size_t s, TransactionFrameBasePtr const& v) {
+                                return s + v->getNumOperations();
+                            });
         mOperationCount.Update(static_cast<int64_t>(numOps));
         CLOG(INFO, "Tx") << fmt::format("applying ledger {} (txs:{}, ops:{})",
                                         ltx.loadHeader().current().ledgerSeq,
