@@ -2,6 +2,7 @@
 #include "crypto/Hex.h"
 #include "crypto/SecretKey.h"
 #include "transactions/SignatureUtils.h"
+#include "transactions/TransactionBridge.h"
 #include "util/Decoder.h"
 #include "util/Fs.h"
 #include "util/XDROperators.h"
@@ -359,6 +360,22 @@ readSecret(const std::string& prompt, bool force_tty)
 #endif
 }
 
+static xdr::xvector<DecoratedSignature, 20>&
+getSignatures(TransactionEnvelope& env)
+{
+    switch (env.type())
+    {
+    case ENVELOPE_TYPE_TX_V0:
+        return env.v0().signatures;
+    case ENVELOPE_TYPE_TX:
+        return env.v1().signatures;
+    case ENVELOPE_TYPE_TX_FEE_BUMP:
+        return env.feeBump().signatures;
+    default:
+        abort();
+    }
+}
+
 void
 signtxn(std::string const& filename, std::string netId, bool base64)
 {
@@ -380,7 +397,8 @@ signtxn(std::string const& filename, std::string netId, bool base64)
 
         TransactionEnvelope txenv;
         xdr::xdr_from_opaque(readFile(filename, base64), txenv);
-        if (txenv.signatures.size() == txenv.signatures.max_size())
+        auto& signatures = getSignatures(txenv);
+        if (signatures.size() == signatures.max_size())
             throw std::runtime_error(
                 "Evelope already contains maximum number of signatures");
 
@@ -388,9 +406,26 @@ signtxn(std::string const& filename, std::string netId, bool base64)
             readSecret("Secret key seed: ", txn_stdin)));
         TransactionSignaturePayload payload;
         payload.networkId = sha256(netId);
-        payload.taggedTransaction.type(ENVELOPE_TYPE_TX);
-        payload.taggedTransaction.tx() = txenv.tx;
-        txenv.signatures.emplace_back(
+        switch (txenv.type())
+        {
+        case ENVELOPE_TYPE_TX_V0:
+            payload.taggedTransaction.type(ENVELOPE_TYPE_TX);
+            payload.taggedTransaction.tx() =
+                txbridge::convertToV1(txenv).v1().tx;
+            break;
+        case ENVELOPE_TYPE_TX:
+            payload.taggedTransaction.type(ENVELOPE_TYPE_TX);
+            payload.taggedTransaction.tx() = txenv.v1().tx;
+            break;
+        case ENVELOPE_TYPE_TX_FEE_BUMP:
+            payload.taggedTransaction.type(ENVELOPE_TYPE_TX_FEE_BUMP);
+            payload.taggedTransaction.feeBump() = txenv.feeBump().tx;
+            break;
+        default:
+            abort();
+        }
+
+        signatures.emplace_back(
             SignatureUtils::getHint(sk.getPublicKey().ed25519()),
             sk.sign(sha256(xdr::xdr_to_opaque(payload))));
 
