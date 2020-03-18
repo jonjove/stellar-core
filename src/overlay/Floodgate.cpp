@@ -156,7 +156,7 @@ Floodgate::updateRecord(StellarMessage const& oldMsg,
                         StellarMessage const& newMsg)
 {
     Hash oldHash = sha256(xdr::xdr_to_opaque(oldMsg));
-    Hash newHash = sha256(xdr::xdr_to_opaque(oldMsg));
+    Hash newHash = sha256(xdr::xdr_to_opaque(newMsg));
 
     auto oldIter = mFloodMap.find(oldHash);
     if (oldIter != mFloodMap.end())
