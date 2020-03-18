@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "ledger/LedgerHashUtils.h"
 #include "overlay/StellarXDR.h"
 #include <unordered_set>
 
