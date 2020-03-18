@@ -269,7 +269,7 @@ TransactionFrame::resetResults(LedgerHeader const& header, int64_t baseFee)
 
     // pre-allocates the results for all operations
     getResult().result.code(txSUCCESS);
-    getResult().result.results().resize(ops.size());
+    getResult().result.results().resize(static_cast<uint32_t>(ops.size()));
 
     mOperations.clear();
 
@@ -470,8 +470,9 @@ TransactionFrame::commonValid(SignatureChecker& signatureChecker,
     // if we are in applying mode fee was already deduced from signing account
     // balance, if not, we need to check if after that deduction this account
     // will still have minimum balance
-    uint32_t feeToPay =
-        (applying && (header.current().ledgerVersion > 8)) ? 0 : getFeeBid();
+    uint32_t feeToPay = (applying && (header.current().ledgerVersion > 8))
+                            ? 0
+                            : static_cast<uint32_t>(getFeeBid());
     // don't let the account go below the reserve after accounting for
     // liabilities
     if (chargeFee && getAvailableBalance(header, sourceAccount) < feeToPay)
@@ -731,7 +732,7 @@ TransactionFrame::applyOperations(SignatureChecker& signatureChecker,
         }
         return success;
     }
-    catch (InvariantDoesNotHold& e)
+    catch (InvariantDoesNotHold&)
     {
         printErrorAndAbort("Invariant failure while applying operations");
     }

@@ -49,7 +49,7 @@ feeBumpUnsigned(TestAccount& feeSource, TestAccount& source, TestAccount& dest,
 
 static TransactionFrameBasePtr
 feeBump(Hash const& networkID, TestAccount& feeSource, TestAccount& source,
-        TestAccount& dest, int64_t outerFee, int64_t innerFee, int64_t amount)
+        TestAccount& dest, int64_t outerFee, uint32_t innerFee, int64_t amount)
 {
     auto fb =
         feeBumpUnsigned(feeSource, source, dest, outerFee, innerFee, amount);

@@ -237,8 +237,7 @@ makeMultiPayment(stellar::TestAccount& destAccount, stellar::TestAccount& src,
         ops.emplace_back(payment(destAccount, i + paymentBase));
     }
     auto tx = src.tx(ops);
-    setFee(tx, tx->getFeeBid() * feeMult);
-    setFee(tx, tx->getFeeBid() + extraFee);
+    setFee(tx, static_cast<uint32_t>(tx->getFeeBid()) * feeMult + extraFee);
     getSignatures(tx).clear();
     tx->addSignature(src);
     return tx;
@@ -579,7 +578,7 @@ testTxSetWithFeeBumps(uint32 protocolVersion)
             auto tx1 = transaction(*app, account1, 1, 1, 100);
             auto fb1 = feeBump(*app, account2, tx1, 200);
             txSet->add(fb1);
-            auto tx2 = transaction(*app, account1, 2, 1, -1);
+            auto tx2 = transaction(*app, account1, 2, -1, 100);
             auto fb2 =
                 feeBump(*app, account2, tx2, minBalance2 - minBalance0 - 199);
             txSet->add(fb2);
@@ -606,7 +605,7 @@ testTxSetWithFeeBumps(uint32 protocolVersion)
             auto tx1 = transaction(*app, account1, 1, 1, 100);
             auto fb1 = feeBump(*app, account2, tx1, 200);
             txSet->add(fb1);
-            auto tx2 = transaction(*app, account2, 1, 1, -1);
+            auto tx2 = transaction(*app, account2, 1, -1, 100);
             auto fb2 =
                 feeBump(*app, account2, tx2, minBalance2 - minBalance0 - 199);
             txSet->add(fb2);
@@ -620,7 +619,7 @@ testTxSetWithFeeBumps(uint32 protocolVersion)
             auto tx1 = transaction(*app, account1, 1, 1, 100);
             auto fb1 = feeBump(*app, account2, tx1, 200);
             txSet->add(fb1);
-            auto tx2 = transaction(*app, account1, 2, 1, -1);
+            auto tx2 = transaction(*app, account1, 2, -1, 100);
             auto fb2 = feeBump(*app, account2, tx2, 200);
             txSet->add(fb2);
             auto tx3 = transaction(*app, account1, 3, 1, 100);
@@ -903,7 +902,7 @@ surgeTest(uint32 protocolVersion, uint32_t nbTxs, uint32_t maxTxSetSize,
         for (uint32_t n = 0; n < nbTxs; n++)
         {
             auto tx = multiPaymentTx(accountB, n + 1, 10000 + 1000 * n);
-            setFee(tx, tx->getFeeBid() - 1);
+            setFee(tx, static_cast<uint32_t>(tx->getFeeBid()) - 1);
             getSignatures(tx).clear();
             tx->addSignature(accountB);
             txSet->add(tx);
@@ -932,7 +931,7 @@ surgeTest(uint32 protocolVersion, uint32_t nbTxs, uint32_t maxTxSetSize,
             REQUIRE(rTx->getNumOperations() == n + 1);
             REQUIRE(tx->getNumOperations() == n + 2);
             // use the same fee
-            setFee(tx, rTx->getFeeBid());
+            setFee(tx, static_cast<uint32_t>(rTx->getFeeBid()));
             getSignatures(tx).clear();
             tx->addSignature(accountB);
             txSet->add(tx);
@@ -960,11 +959,11 @@ surgeTest(uint32 protocolVersion, uint32_t nbTxs, uint32_t maxTxSetSize,
             auto tx = multiPaymentTx(accountB, n + 1, 10000 + 1000 * n);
             if (n == 2)
             {
-                setFee(tx, tx->getFeeBid() - 1);
+                setFee(tx, static_cast<uint32_t>(tx->getFeeBid()) - 1);
             }
             else
             {
-                setFee(tx, tx->getFeeBid() + 1);
+                setFee(tx, static_cast<uint32_t>(tx->getFeeBid()) + 1);
             }
             getSignatures(tx).clear();
             tx->addSignature(accountB);

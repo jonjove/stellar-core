@@ -304,7 +304,7 @@ TEST_CASE("txresults", "[tx][txresults]")
             {
                 for_all_versions(*app, [&] {
                     auto tx = a.tx({payment(root, 1)});
-                    setFee(tx, tx->getFeeBid() - 1);
+                    setFee(tx, static_cast<uint32_t>(tx->getFeeBid()) - 1);
                     validateTxResults(tx, *app,
                                       {baseFee - 1, txINSUFFICIENT_FEE});
                 });
@@ -373,7 +373,7 @@ TEST_CASE("txresults", "[tx][txresults]")
                 for_all_versions(*app, [&] {
                     auto tx = a.tx({payment(root, 1)});
                     getSignatures(tx).clear();
-                    setFee(tx, tx->getFeeBid() - 1);
+                    setFee(tx, static_cast<uint32_t>(tx->getFeeBid()) - 1);
                     validateTxResults(tx, *app,
                                       {baseFee - 1, txINSUFFICIENT_FEE});
                 });
@@ -455,7 +455,7 @@ TEST_CASE("txresults", "[tx][txresults]")
                 for_all_versions(*app, [&] {
                     auto tx = a.tx({payment(root, 1)});
                     tx->addSignature(a);
-                    setFee(tx, tx->getFeeBid() - 1);
+                    setFee(tx, static_cast<uint32_t>(tx->getFeeBid()) - 1);
                     validateTxResults(tx, *app,
                                       {baseFee - 1, txINSUFFICIENT_FEE});
                 });
