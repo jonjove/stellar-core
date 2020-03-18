@@ -648,15 +648,6 @@ TransactionFrame::markResultFailed()
     // a different XDR structure is constructed. However, txFAILED and txSUCCESS
     // have the same underlying field number so this does not occur.
     getResult().result.code(txFAILED);
-
-    // sanity check in case some implementations decide
-    // to not implement std::move properly
-    auto const& allResults = getResult().result.results();
-    assert(allResults.size() == getNumOperations());
-    for (size_t i = 0; i < getNumOperations(); i++)
-    {
-        assert(&mOperations[i]->getResult() == &allResults[i]);
-    }
 }
 
 bool
