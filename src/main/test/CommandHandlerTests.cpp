@@ -24,12 +24,16 @@ TEST_CASE("transaction envelope bridge", "[commandhandler]")
     auto baseFee = app->getLedgerManager().getLastTxFee();
 
     std::string const PENDING_RESULT = "{\"status\": \"PENDING\"}";
-    std::string const NOT_SUPPORTED_RESULT =
-        "{\"status\": \"ERROR\" , \"error\": \"AAAAAAAAAGT////0AAAAAA==\"}";
+    auto notSupportedResult = [](int64_t fee) {
+        TransactionResult txRes;
+        txRes.feeCharged = fee;
+        txRes.result.code(txNOT_SUPPORTED);
+        auto inner = decoder::encode_b64(xdr::xdr_to_opaque(txRes));
+        return "{\"status\": \"ERROR\" , \"error\": \"" + inner + "\"}";
+    };
 
     auto sign = [&](auto& signatures, SecretKey const& key, auto... input) {
-        auto hash = sha256(xdr::xdr_to_opaque(app->getNetworkID(),
-                                              ENVELOPE_TYPE_TX, input...));
+        auto hash = sha256(xdr::xdr_to_opaque(app->getNetworkID(), input...));
         signatures.emplace_back(SignatureUtils::sign(key, hash));
     };
 
@@ -54,7 +58,7 @@ TEST_CASE("transaction envelope bridge", "[commandhandler]")
             tx.operations.emplace_back(payment(root, 1));
 
             xdr::xvector<DecoratedSignature, 20> signatures;
-            sign(signatures, root, tx);
+            sign(signatures, root, ENVELOPE_TYPE_TX, tx);
             REQUIRE(submit(tx, signatures) == PENDING_RESULT);
         });
     }
@@ -73,35 +77,62 @@ TEST_CASE("transaction envelope bridge", "[commandhandler]")
             tx.seqNum = root.nextSequenceNumber();
             tx.operations.emplace_back(payment(root, 1));
 
-            sign(env.v0().signatures, root, 0, tx);
+            sign(env.v0().signatures, root, ENVELOPE_TYPE_TX, 0, tx);
             REQUIRE(submit(env) == PENDING_RESULT);
         });
     }
 
+    auto createV1 = [&]() {
+        auto root = TestAccount::createRoot(*app);
+
+        TransactionEnvelope env(ENVELOPE_TYPE_TX);
+        auto& tx = env.v1().tx;
+        tx.sourceAccount = root;
+        tx.fee = baseFee;
+        tx.seqNum = root.nextSequenceNumber();
+        tx.operations.emplace_back(payment(root, 1));
+
+        sign(env.v1().signatures, root, ENVELOPE_TYPE_TX, tx);
+        return env;
+    };
+
     SECTION("new-style transaction v1")
     {
-        auto createV1 = [&]() {
-            auto root = TestAccount::createRoot(*app);
-
-            TransactionEnvelope env(ENVELOPE_TYPE_TX);
-            auto& tx = env.v1().tx;
-            tx.sourceAccount = root;
-            tx.fee = baseFee;
-            tx.seqNum = root.nextSequenceNumber();
-            tx.operations.emplace_back(payment(root, 1));
-
-            sign(env.v1().signatures, root, tx);
-            return env;
-        };
-
         for_versions_to(12, *app, [&]() {
             closeLedgerOn(*app, 2, 1, 1, 2017);
-            REQUIRE(submit(createV1()) == NOT_SUPPORTED_RESULT);
+            REQUIRE(submit(createV1()) == notSupportedResult(baseFee));
         });
 
         for_versions_from(13, *app, [&]() {
             closeLedgerOn(*app, 2, 1, 1, 2017);
             REQUIRE(submit(createV1()) == PENDING_RESULT);
+        });
+    }
+
+    SECTION("fee-bump")
+    {
+        auto createFeeBump = [&]() {
+            auto root = TestAccount::createRoot(*app);
+
+            TransactionEnvelope env(ENVELOPE_TYPE_TX_FEE_BUMP);
+            auto& fb = env.feeBump().tx;
+            fb.feeSource = root.getPublicKey();
+            fb.fee = 2 * baseFee;
+            fb.innerTx.type(ENVELOPE_TYPE_TX);
+            fb.innerTx.v1() = createV1().v1();
+
+            sign(env.feeBump().signatures, root, ENVELOPE_TYPE_TX_FEE_BUMP, fb);
+            return env;
+        };
+
+        for_versions_to(12, *app, [&]() {
+            closeLedgerOn(*app, 2, 1, 1, 2017);
+            REQUIRE(submit(createFeeBump()) == notSupportedResult(2 * baseFee));
+        });
+
+        for_versions_from(13, *app, [&]() {
+            closeLedgerOn(*app, 2, 1, 1, 2017);
+            REQUIRE(submit(createFeeBump()) == PENDING_RESULT);
         });
     }
 }
