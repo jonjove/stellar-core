@@ -360,22 +360,6 @@ readSecret(const std::string& prompt, bool force_tty)
 #endif
 }
 
-static xdr::xvector<DecoratedSignature, 20>&
-getSignatures(TransactionEnvelope& env)
-{
-    switch (env.type())
-    {
-    case ENVELOPE_TYPE_TX_V0:
-        return env.v0().signatures;
-    case ENVELOPE_TYPE_TX:
-        return env.v1().signatures;
-    case ENVELOPE_TYPE_TX_FEE_BUMP:
-        return env.feeBump().signatures;
-    default:
-        abort();
-    }
-}
-
 void
 signtxn(std::string const& filename, std::string netId, bool base64)
 {
@@ -397,7 +381,7 @@ signtxn(std::string const& filename, std::string netId, bool base64)
 
         TransactionEnvelope txenv;
         xdr::xdr_from_opaque(readFile(filename, base64), txenv);
-        auto& signatures = getSignatures(txenv);
+        auto& signatures = txbridge::getSignatures(txenv);
         if (signatures.size() == signatures.max_size())
             throw std::runtime_error(
                 "Evelope already contains maximum number of signatures");
