@@ -440,7 +440,7 @@ TransactionQueue::maybeVersionUpgraded()
             for (auto& txFrame : kv.second.mTransactions)
             {
                 auto oldTxFrame = txFrame;
-                auto envV1 = txbridge::convertToV1(txFrame->getEnvelope());
+                auto envV1 = txbridge::convertForV13(txFrame->getEnvelope());
                 txFrame = TransactionFrame::makeTransactionFromWire(
                     mApp.getNetworkID(), envV1);
                 res.emplace_back(ReplacedTransaction{oldTxFrame, txFrame});

@@ -557,7 +557,7 @@ CommandHandler::tx(std::string const& params, std::string& retStr)
             auto lhhe = mApp.getLedgerManager().getLastClosedLedgerHeader();
             if (lhhe.header.ledgerVersion >= 13)
             {
-                envelope = txbridge::convertToV1(envelope);
+                envelope = txbridge::convertForV13(envelope);
             }
         }
 

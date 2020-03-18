@@ -11,9 +11,9 @@ namespace txbridge
 {
 
 TransactionEnvelope
-convertToV1(TransactionEnvelope const& input)
+convertForV13(TransactionEnvelope const& input)
 {
-    if (input.type() == ENVELOPE_TYPE_TX)
+    if (input.type() != ENVELOPE_TYPE_TX_V0)
     {
         return input;
     }

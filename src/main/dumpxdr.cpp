@@ -410,8 +410,11 @@ signtxn(std::string const& filename, std::string netId, bool base64)
         {
         case ENVELOPE_TYPE_TX_V0:
             payload.taggedTransaction.type(ENVELOPE_TYPE_TX);
+            // TransactionV0 and Transaction always have the same signatures so
+            // there is no reason to check versions here, just always convert to
+            // Transaction
             payload.taggedTransaction.tx() =
-                txbridge::convertToV1(txenv).v1().tx;
+                txbridge::convertForV13(txenv).v1().tx;
             break;
         case ENVELOPE_TYPE_TX:
             payload.taggedTransaction.type(ENVELOPE_TYPE_TX);

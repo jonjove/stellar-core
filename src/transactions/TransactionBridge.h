@@ -15,7 +15,7 @@ typedef std::shared_ptr<TransactionFrame> TransactionFramePtr;
 namespace txbridge
 {
 
-TransactionEnvelope convertToV1(TransactionEnvelope const& input);
+TransactionEnvelope convertForV13(TransactionEnvelope const& input);
 
 xdr::xvector<DecoratedSignature, 20>& getSignatures(TransactionEnvelope& env);
 
