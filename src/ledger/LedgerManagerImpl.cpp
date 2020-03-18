@@ -115,8 +115,6 @@ LedgerManagerImpl::LedgerManagerImpl(Application& app)
           app.getMetrics().NewHistogram({"ledger", "transaction", "count"}))
     , mOperationCount(
           app.getMetrics().NewHistogram({"ledger", "operation", "count"}))
-    , mInternalErrorCount(app.getMetrics().NewCounter(
-          {"ledger", "transaction", "internal-error"}))
     , mLedgerClose(app.getMetrics().NewTimer({"ledger", "ledger", "close"}))
     , mLedgerAgeClosed(app.getMetrics().NewTimer({"ledger", "age", "closed"}))
     , mLedgerAge(
@@ -919,11 +917,6 @@ LedgerManagerImpl::applyTransactions(
                           << mApp.getConfig().toShortString(tx->getSourceID())
                           << ")";
         tx->apply(mApp, ltx, tm);
-
-        if (tx->getResultCode() == txINTERNAL_ERROR)
-        {
-            mInternalErrorCount.inc();
-        }
 
         TransactionResultPair results;
         results.transactionHash = tx->getContentsHash();

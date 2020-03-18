@@ -753,8 +753,13 @@ TransactionFrame::applyOperations(SignatureChecker& signatureChecker,
     }
 
     // This is only reachable if an exception is thrown
-    // operations and txChangesAfter should already be empty at this point
     getResult().result.code(txINTERNAL_ERROR);
+
+    auto& internalErrorCounter = app.getMetrics().NewCounter(
+        {"ledger", "transaction", "internal-error"});
+    internalErrorCounter.inc();
+
+    // operations and txChangesAfter should already be empty at this point
     if (outerMeta.v() == 1)
     {
         outerMeta.v1().operations.clear();
