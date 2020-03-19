@@ -69,36 +69,44 @@ TransactionQueue::canAdd(TransactionFrameBasePtr tx,
     {
         auto& transactions = stateIter->second.mTransactions;
 
-        int64_t firstSeq = transactions.front()->getSeqNum();
-        int64_t lastSeq = transactions.back()->getSeqNum();
-        if (tx->getSeqNum() < firstSeq || tx->getSeqNum() > lastSeq + 1)
+        if (tx->getEnvelope().type() != ENVELOPE_TYPE_TX_FEE_BUMP)
         {
-            tx->getResult().result.code(txBAD_SEQ);
-            return TransactionQueue::AddResult::ADD_STATUS_ERROR;
+            seqNum = transactions.back()->getSeqNum();
+            oldTxIter = transactions.end();
         }
-
-        assert(tx->getSeqNum() - firstSeq <=
-               static_cast<int64_t>(transactions.size()));
-        oldTxIter = transactions.begin() + (tx->getSeqNum() - firstSeq);
-        assert(oldTxIter == transactions.end() ||
-               (*oldTxIter)->getSeqNum() == tx->getSeqNum());
-
-        if (oldTxIter != transactions.end())
+        else
         {
-            int64_t oldFee = (*oldTxIter)->getFeeBid();
-            if (tx->getFeeBid() < FEE_MULTIPLIER * oldFee)
+            int64_t firstSeq = transactions.front()->getSeqNum();
+            int64_t lastSeq = transactions.back()->getSeqNum();
+            if (tx->getSeqNum() < firstSeq || tx->getSeqNum() > lastSeq + 1)
             {
-                tx->getResult().result.code(txINSUFFICIENT_FEE);
+                tx->getResult().result.code(txBAD_SEQ);
                 return TransactionQueue::AddResult::ADD_STATUS_ERROR;
             }
 
-            if ((*oldTxIter)->getFeeSourceID() == tx->getFeeSourceID())
-            {
-                netFee -= oldFee;
-            }
-        }
+            assert(tx->getSeqNum() - firstSeq <=
+                   static_cast<int64_t>(transactions.size()));
+            oldTxIter = transactions.begin() + (tx->getSeqNum() - firstSeq);
+            assert(oldTxIter == transactions.end() ||
+                   (*oldTxIter)->getSeqNum() == tx->getSeqNum());
 
-        seqNum = tx->getSeqNum() - 1;
+            if (oldTxIter != transactions.end())
+            {
+                int64_t oldFee = (*oldTxIter)->getFeeBid();
+                if (tx->getFeeBid() < FEE_MULTIPLIER * oldFee)
+                {
+                    tx->getResult().result.code(txINSUFFICIENT_FEE);
+                    return TransactionQueue::AddResult::ADD_STATUS_ERROR;
+                }
+
+                if ((*oldTxIter)->getFeeSourceID() == tx->getFeeSourceID())
+                {
+                    netFee -= oldFee;
+                }
+            }
+
+            seqNum = tx->getSeqNum() - 1;
+        }
     }
 
     LedgerTxn ltx(mApp.getLedgerTxnRoot());

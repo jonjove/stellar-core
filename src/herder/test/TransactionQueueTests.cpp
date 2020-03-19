@@ -1038,10 +1038,8 @@ TEST_CASE("replace by fee", "[herder][transactionqueue]")
             {
                 SECTION(position[i - 1] + " transaction")
                 {
-                    auto tx = transaction(*app, account1, i, 1, 2000);
-                    txs[i - 1] = tx;
-                    test.add(tx,
-                             TransactionQueue::AddResult::ADD_STATUS_PENDING);
+                    test.add(transaction(*app, account1, i, 1, 2000),
+                             TransactionQueue::AddResult::ADD_STATUS_ERROR);
                     test.check({{{account1, 0, txs}, {account2}}, {}});
                 }
             }
