@@ -37,8 +37,7 @@ class FeeBumpTransactionFrame : public TransactionFrameBase
     };
 
     ValidationType commonValid(SignatureChecker& signatureChecker,
-                               AbstractLedgerTxn& ltxOuter,
-                               SequenceNumber current, bool applying);
+                               AbstractLedgerTxn& ltxOuter, bool applying);
 
     bool removeAccountSigner(LedgerTxnHeader const& header,
                              LedgerTxnEntry& account,

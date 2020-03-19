@@ -144,7 +144,7 @@ FeeBumpTransactionFrame::checkValid(AbstractLedgerTxn& ltxOuter,
     SignatureChecker signatureChecker{ltx.loadHeader().current().ledgerVersion,
                                       getContentsHash(),
                                       mEnvelope.feeBump().signatures};
-    if (commonValid(signatureChecker, ltx, current, false) !=
+    if (commonValid(signatureChecker, ltx, false) !=
         ValidationType::kFullyValid)
     {
         return false;
@@ -199,8 +199,7 @@ FeeBumpTransactionFrame::commonValidPreSeqNum(AbstractLedgerTxn& ltx)
 
 FeeBumpTransactionFrame::ValidationType
 FeeBumpTransactionFrame::commonValid(SignatureChecker& signatureChecker,
-                                     AbstractLedgerTxn& ltxOuter,
-                                     SequenceNumber current, bool applying)
+                                     AbstractLedgerTxn& ltxOuter, bool applying)
 {
     LedgerTxn ltx(ltxOuter);
     ValidationType res = ValidationType::kInvalid;
