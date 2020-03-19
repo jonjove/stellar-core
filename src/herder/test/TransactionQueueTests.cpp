@@ -1001,7 +1001,7 @@ TEST_CASE("replace by fee", "[herder][transactionqueue]")
         for (uint32_t i = 1; i <= 3; ++i)
         {
             auto tx = transaction(*app, account1, i, 1, 100);
-            auto fb = feeBump(*app, feeSource, tx, 200);
+            auto fb = feeBump(*app, feeSource, tx, 400);
             txs.emplace_back(fb);
             test.add(txs.back(),
                      TransactionQueue::AddResult::ADD_STATUS_PENDING);
@@ -1056,7 +1056,7 @@ TEST_CASE("replace by fee", "[herder][transactionqueue]")
                 for (uint32_t i = 1; i <= 3; ++i)
                 {
                     auto tx = transaction(*app, account1, i, 1, 100);
-                    auto fb = feeBump(*app, feeSource, tx, 199);
+                    auto fb = feeBump(*app, feeSource, tx, 399);
                     test.add(fb, TransactionQueue::AddResult::ADD_STATUS_ERROR);
                     test.check({{{account1, 0, txs}, {account2}}, {}});
                 }
@@ -1071,7 +1071,7 @@ TEST_CASE("replace by fee", "[herder][transactionqueue]")
                 for (uint32_t i = 1; i <= 3; ++i)
                 {
                     auto tx = transaction(*app, account1, i, 1, 100);
-                    auto fb = feeBump(*app, feeSource, tx, 1999);
+                    auto fb = feeBump(*app, feeSource, tx, 3999);
                     test.add(fb, TransactionQueue::AddResult::ADD_STATUS_ERROR);
                     test.check({{{account1, 0, txs}, {account2}}, {}});
                 }
@@ -1087,7 +1087,7 @@ TEST_CASE("replace by fee", "[herder][transactionqueue]")
                         " transaction from same source account")
                 {
                     auto tx = transaction(*app, account1, i, 1, 100);
-                    auto fb = feeBump(*app, account1, tx, 2000);
+                    auto fb = feeBump(*app, account1, tx, 4000);
                     txs[i - 1] = fb;
                     test.add(fb,
                              TransactionQueue::AddResult::ADD_STATUS_PENDING);
@@ -1097,7 +1097,7 @@ TEST_CASE("replace by fee", "[herder][transactionqueue]")
                         " transaction from different source account")
                 {
                     auto tx = transaction(*app, account1, i, 1, 100);
-                    auto fb = feeBump(*app, account2, tx, 2000);
+                    auto fb = feeBump(*app, account2, tx, 4000);
                     txs[i - 1] = fb;
                     test.add(fb,
                              TransactionQueue::AddResult::ADD_STATUS_PENDING);

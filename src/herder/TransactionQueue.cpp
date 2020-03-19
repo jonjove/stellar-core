@@ -39,6 +39,25 @@ TransactionQueue::TransactionQueue(Application& app, int pendingDepth,
     }
 }
 
+static bool
+canReplaceByFee(TransactionFrameBasePtr tx, TransactionFrameBasePtr oldTx)
+{
+    int64_t newFee = tx->getFeeBid();
+    uint32_t newNumOps = std::max<uint32_t>(1, tx->getNumOperations());
+    int64_t oldFee = oldTx->getFeeBid();
+    uint32_t oldNumOps = std::max<uint32_t>(1, oldTx->getNumOperations());
+
+    // newFee / newNumOps >= FEE_MULTIPLIER * oldFee / oldNumOps
+    // is equivalent to
+    // newFee * oldNumOps >= FEE_MULTIPLIER * oldFee * newNumOps
+    //
+    // FEE_MULTIPLIER * v2 does not overflow uint128_t because fees are bounded
+    // by INT64_MAX, while number of operations and FEE_MULTIPLIER are small.
+    auto v1 = bigMultiply(newFee, oldNumOps);
+    auto v2 = bigMultiply(oldFee, newNumOps);
+    return v1 >= TransactionQueue::FEE_MULTIPLIER * v2;
+}
+
 TransactionQueue::AddResult
 TransactionQueue::canAdd(TransactionFrameBasePtr tx,
                          AccountStates::iterator& stateIter,
@@ -92,13 +111,13 @@ TransactionQueue::canAdd(TransactionFrameBasePtr tx,
 
             if (oldTxIter != transactions.end())
             {
-                int64_t oldFee = (*oldTxIter)->getFeeBid();
-                if (tx->getFeeBid() < FEE_MULTIPLIER * oldFee)
+                if (!canReplaceByFee(tx, *oldTxIter))
                 {
                     tx->getResult().result.code(txINSUFFICIENT_FEE);
                     return TransactionQueue::AddResult::ADD_STATUS_ERROR;
                 }
 
+                int64_t oldFee = (*oldTxIter)->getFeeBid();
                 if ((*oldTxIter)->getFeeSourceID() == tx->getFeeSourceID())
                 {
                     netFee -= oldFee;
