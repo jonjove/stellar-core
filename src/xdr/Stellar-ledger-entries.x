@@ -78,7 +78,10 @@ enum LedgerEntryType
     ACCOUNT = 0,
     TRUSTLINE = 1,
     OFFER = 2,
-    DATA = 3
+    DATA = 3,
+    CLAIMABLE_BALANCE = 4,
+    SPONSORSHIP = 5,
+    PREAUTHORIZATION = 6
 };
 
 struct Signer
@@ -260,6 +263,202 @@ struct DataEntry
     ext;
 };
 
+enum ClaimPredicateType
+{
+    CLAIM_PREDICATE_UNCONDITIONAL = 0,
+    CLAIM_PREDICATE_AND = 1,
+    CLAIM_PREDICATE_OR = 2,
+    CLAIM_PREDICATE_BEFORE_ABSOLUTE_TIME = 3,
+    CLAIM_PREDICATE_AFTER_ABSOLUTE_TIME = 4,
+    CLAIM_PREDICATE_BEFORE_RELATIVE_TIME = 5,
+    CLAIM_PREDICATE_AFTER_RELATIVE_TIME = 6
+};
+
+union ClaimPredicate switch (ClaimPredicateType type)
+{
+case CLAIM_PREDICATE_UNCONDITIONAL:
+    void;
+case CLAIM_PREDICATE_AND:
+    ClaimPredicate andPredicates<2>;
+case CLAIM_PREDICATE_OR:
+    ClaimPredicate orPredicates<2>;
+case CLAIM_PREDICATE_BEFORE_ABSOLUTE_TIME:
+    int64 absBefore;
+case CLAIM_PREDICATE_AFTER_ABSOLUTE_TIME:
+    int64 absAfter;
+case CLAIM_PREDICATE_BEFORE_RELATIVE_TIME:
+    int64 relBefore;    // Seconds since closeTime of the ledger in which the
+                        // ClaimableBalanceEntry was created
+case CLAIM_PREDICATE_AFTER_RELATIVE_TIME:
+    int64 relAfter;     // Seconds since closeTime of the ledger in which the
+                        // ClaimableBalanceEntry was created
+};
+
+enum ClaimantType
+{
+    CLAIMANT_TYPE_V0 = 0
+};
+
+union Claimant switch (ClaimantType type)
+{
+case CLAIMANT_TYPE_V0:
+    struct {
+        AccountID destination;    // The account that can use this condition
+        ClaimPredicate predicate; // Claimable if predicate is true
+    } v0;
+};
+
+enum ClaimableBalanceIDType
+{
+    CLAIMABLE_BALANCE_ID_TYPE_V0 = 0
+};
+
+union ClaimableBalanceID switch (ClaimableBalanceIDType type)
+{
+case CLAIMABLE_BALANCE_ID_TYPE_V0:
+    Hash v0;
+};
+
+struct ClaimableBalanceEntry
+{
+    // Unique identifier for this ClaimableBalanceEntry
+    ClaimableBalanceID balanceID;
+
+    // Account that created this ClaimableBalanceEntry
+    AccountID createdBy;
+
+    // List of claimants with associated predicate
+    Claimant claimants<10>;
+
+    // Any asset including native
+    Asset asset;
+
+    // Amount of asset
+    int64 amount;
+
+    // Amount of native asset to pay the reserve
+    int64 reserve;
+
+    // reserved for future use
+    union switch (int v)
+    {
+    case 0:
+        void;
+    }
+    ext;
+};
+
+enum SponsorshipType
+{
+    ACCOUNT_SPONSORSHIP = 0,
+    SIGNER_SPONSORSHIP = 1,
+    TRUSTLINE_SPONSORSHIP = 2,
+    OFFER_SPONSORSHIP = 3,
+    DATA_SPONSORSHIP = 4
+};
+
+struct AccountSponsorship
+{
+    // Account to sponsor
+    AccountID accountID;
+};
+
+struct SignerSponsorship
+{
+    // Account for which to sponsor the signer
+    AccountID accountID;
+};
+
+struct TrustLineSponsorship
+{
+    // Account for which to sponsor the trust line
+    AccountID accountID;
+
+    // Trust line asset
+    Asset asset;
+};
+
+struct OfferSponsorship
+{
+    // Account for which to sponsor the offer
+    AccountID sellerID;
+
+    // Offer must be buying this asset
+    Asset buying;
+
+    // Offer must be selling this asset
+    Asset selling;
+};
+
+struct DataSponsorship
+{
+    // Account for which to sponsor the data
+    AccountID accountID;
+
+    // Name of the data entry to sponsor
+    string64 dataName;
+};
+
+union SponsorshipDescriptor switch (SponsorshipType type)
+{
+case ACCOUNT_SPONSORSHIP:
+    AccountSponsorship account;
+case SIGNER_SPONSORSHIP:
+    SignerSponsorship signer;
+case TRUSTLINE_SPONSORSHIP:
+    TrustLineSponsorship trustLine;
+case OFFER_SPONSORSHIP:
+    OfferSponsorship offer;
+case DATA_SPONSORSHIP:
+    DataSponsorship data;
+};
+
+struct SponsorshipEntry
+{
+    // Account that created this sponsorship
+    AccountID createdBy;
+
+    // Global ordered identifier for sponsorships
+    int64 sponsorshipID;
+
+    // Describe the ledger entries being sponsored
+    SponsorshipDescriptor descriptor;
+
+    // Reserve stored in this sponsorship
+    int64 reserve;
+
+    // reserved for future use
+    union switch (int v)
+    {
+    case 0:
+        void;
+    }
+    ext;
+};
+
+struct PreauthorizationEntry
+{
+    // Account for which the preauthorization applies
+    AccountID accountID;
+
+    // Asset for which the preauthorization applies
+    Asset asset;
+
+    // See TrustLineFlags
+    uint32 flags;
+
+    // Amount of native asset to pay the reserve
+    int64 reserve;
+
+    // reserved for future use
+    union switch (int v)
+    {
+    case 0:
+        void;
+    }
+    ext;
+};
+
 struct LedgerEntry
 {
     uint32 lastModifiedLedgerSeq; // ledger the LedgerEntry was last changed
@@ -274,6 +473,12 @@ struct LedgerEntry
         OfferEntry offer;
     case DATA:
         DataEntry data;
+    case CLAIMABLE_BALANCE:
+        ClaimableBalanceEntry claimableBalance;
+    case SPONSORSHIP:
+        SponsorshipEntry sponsorship;
+    case PREAUTHORIZATION:
+        PreauthorizationEntry preauthorization;
     }
     data;
 

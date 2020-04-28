@@ -143,6 +143,26 @@ case DATA:
         AccountID accountID;
         string64 dataName;
     } data;
+
+case CLAIMABLE_BALANCE:
+    struct
+    {
+        ClaimableBalanceID balanceID;
+    } claimableBalance;
+
+case SPONSORSHIP:
+    struct
+    {
+        AccountID createdBy;
+        int64 sponsorshipID;
+    } sponsorship;
+
+case PREAUTHORIZATION:
+    struct
+    {
+        AccountID accountID;
+        Asset asset;
+    } preauthorization;
 };
 
 enum BucketEntryType
