@@ -84,6 +84,28 @@ generateLedgerEntryWithSameKey(LedgerEntry const& leBase)
             le.data.trustLine().accountID = leBase.data.trustLine().accountID;
             le.data.trustLine().asset = leBase.data.trustLine().asset;
             break;
+        case CLAIMABLE_BALANCE:
+            le.data.claimableBalance() =
+                LedgerTestUtils::generateValidClaimableBalanceEntry();
+            le.data.claimableBalance().balanceID =
+                leBase.data.claimableBalance().balanceID;
+            break;
+        case SPONSORSHIP:
+            le.data.sponsorship() =
+                LedgerTestUtils::generateValidSponsorshipEntry();
+            le.data.sponsorship().createdBy =
+                leBase.data.sponsorship().createdBy;
+            le.data.sponsorship().sponsorshipID =
+                leBase.data.sponsorship().sponsorshipID;
+            break;
+        case PREAUTHORIZATION:
+            le.data.preauthorization() =
+                LedgerTestUtils::generateValidPreauthorizationEntry();
+            le.data.preauthorization().accountID =
+                leBase.data.preauthorization().accountID;
+            le.data.preauthorization().asset =
+                leBase.data.preauthorization().asset;
+            break;
         default:
             REQUIRE(false);
         }
