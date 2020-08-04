@@ -234,4 +234,38 @@ TEST_CASE("create account", "[tx][createaccount]")
             }
         });
     }
+    SECTION("too many sponsoring")
+    {
+        auto a2 = root.create(
+            "a2", app->getLedgerManager().getLastMinBalance(UINT32_MAX));
+        {
+            LedgerTxn ltx(app->getLedgerTxnRoot());
+            auto acc = stellar::loadAccount(ltx, a2.getPublicKey());
+            auto& le = acc.current();
+            auto& ae = le.data.account();
+            ae.ext.v(1);
+            ae.ext.v1().ext.v(2);
+            ae.ext.v1().ext.v2().numSponsoring = UINT32_MAX;
+            ltx.commit();
+        }
+
+        root.pay(a2, app->getLedgerManager().getLastMinBalance(2));
+
+        auto key = getAccount("a1");
+        TestAccount a1(*app, key);
+        auto tx = transactionFrameFromOps(app->getNetworkID(), a2,
+                                          {a2.op(sponsorFutureReserves(a1)),
+                                           a2.op(createAccount(a1, 0)),
+                                           a1.op(confirmAndClearSponsor())},
+                                          {key});
+
+        LedgerTxn ltx(app->getLedgerTxnRoot());
+        TransactionMeta txm(2);
+        REQUIRE(tx->checkValid(ltx, 0, 0, 0));
+        REQUIRE(!tx->apply(*app, ltx, txm));
+        REQUIRE(tx->getResult().result.results()[1].code() ==
+                opTOO_MANY_SPONSORING);
+
+        ltx.commit();
+    }
 }
