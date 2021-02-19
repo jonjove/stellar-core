@@ -34,23 +34,6 @@ cereal_override(cereal::JSONOutputArchive& ar, const xdr::opaque_array<N>& s,
                  field);
 }
 
-// We still need one explicit composite-container override because cereal
-// appears to process arrays-of-arrays internally, without calling back through
-// an NVP adaptor.
-template <uint32_t N>
-void
-cereal_override(cereal::JSONOutputArchive& ar,
-                const xdr::xarray<stellar::Hash, N>& s, const char* field)
-{
-    std::vector<std::string> tmp;
-    for (auto const& h : s)
-    {
-        tmp.emplace_back(
-            stellar::binToHex(stellar::ByteSlice(h.data(), h.size())));
-    }
-    xdr::archive(ar, tmp, field);
-}
-
 template <uint32_t N>
 void
 cereal_override(cereal::JSONOutputArchive& ar, const xdr::opaque_vec<N>& s,
@@ -98,6 +81,21 @@ cereal_override(cereal::JSONOutputArchive& ar, const xdr::pointer<T>& t,
     }
 }
 
+template <typename T>
+std::enable_if_t<xdr::xdr_traits<T>::is_container>
+cereal_override(cereal::JSONOutputArchive& ar, T const& t,
+                const char* field)
+{
+    ar.setNextName(field);
+    ar.startNode();
+    ar(cereal::make_size_tag(0));
+    for (auto const& element : t)
+    {
+        xdr::archive(ar, element);
+    }
+    ar.finishNode();
+}
+
 // NOTE: Nothing else should include xdrpp/cereal.h directly.
 // cereal_override's have to be defined before xdrpp/cereal.h,
 // otherwise some interplay of name lookup and visibility
@@ -120,11 +118,11 @@ xdr_to_string(const T& t, std::string const& name = "", bool compact = false)
                         : cereal::JSONOutputArchive::Options::Default());
         if (!name.empty())
         {
-            ar(cereal::make_nvp(name, t));
+            xdr::archive(ar, t, name.c_str());
         }
         else
         {
-            ar(t);
+            xdr::archive(ar, t);
         }
     }
     return os.str();

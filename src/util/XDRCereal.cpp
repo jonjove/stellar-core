@@ -22,13 +22,11 @@ cereal_override(cereal::JSONOutputArchive& ar,
                      field);
         return;
     case stellar::KEY_TYPE_MUXED_ED25519:
-        xdr::archive(
-            ar,
-            std::make_tuple(
-                cereal::make_nvp("id", muxedAccount.med25519().id),
-                cereal::make_nvp("accountID", stellar::KeyUtils::toStrKey(
-                                                  toAccountID(muxedAccount)))),
-            field);
+        ar.setNextName(field);
+        ar.startNode();
+        xdr::archive(ar, muxedAccount.med25519().id, "id");
+        xdr::archive(ar, toAccountID(muxedAccount), "accountID");
+        ar.finishNode();
         return;
     default:
         // this would be a bug
@@ -40,5 +38,16 @@ void
 cereal_override(cereal::JSONOutputArchive& ar, const stellar::Asset& s,
                 const char* field)
 {
-    xdr::archive(ar, stellar::assetToString(s), field);
+    if (s.type() == stellar::ASSET_TYPE_NATIVE)
+    {
+        xdr::archive(ar, std::string("NATIVE"), field);
+    }
+    else
+    {
+        ar.setNextName(field);
+        ar.startNode();
+        xdr::archive(ar, stellar::assetToString(s), "assetCode");
+        xdr::archive(ar, stellar::getIssuer(s), "issuer");
+        ar.finishNode();
+    }
 }
