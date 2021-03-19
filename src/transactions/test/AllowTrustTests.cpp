@@ -292,7 +292,7 @@ template <int V> struct AuthorizedToMaintainLiabilities
             for_versions_from(13, *app, [&] {
                 REQUIRE_THROWS_AS(
                     gateway.allowTrust(idr, a1, TRUSTLINE_AUTH_FLAGS),
-                    ex_ALLOW_TRUST_MALFORMED);
+                    GetException<ex_ALLOW_TRUST_MALFORMED>);
             });
         }
 
@@ -349,14 +349,14 @@ template <int V> struct AuthorizedToMaintainLiabilities
                     issuer.allowTrust(iss, a3, flagOp);
                     REQUIRE_THROWS_AS(
                         issuer.allowMaintainLiabilities(iss, a3, flagOp),
-                        ex_ALLOW_TRUST_CANT_REVOKE);
+                        GetException<ex_ALLOW_TRUST_CANT_REVOKE>);
                 }
 
                 SECTION("authorized to maintain liabilities -> not authorized")
                 {
                     issuer.allowMaintainLiabilities(iss, a3, flagOp);
                     REQUIRE_THROWS_AS(issuer.denyTrust(iss, a3, flagOp),
-                                      ex_ALLOW_TRUST_CANT_REVOKE);
+                                      GetException<ex_ALLOW_TRUST_CANT_REVOKE>);
                 }
             }
         });
@@ -366,7 +366,14 @@ template <int V> struct AuthorizedToMaintainLiabilities
 
 TEST_CASE("authorized to maintain liabilities", "[tx][allowtrust]")
 {
-    detail::AuthorizedToMaintainLiabilities<0>::test();
+    SECTION("allow trust")
+    {
+        detail::AuthorizedToMaintainLiabilities<0>::test();
+    }
+    SECTION("set trust line flags")
+    {
+        detail::AuthorizedToMaintainLiabilities<1>::test();
+    }
 }
 
 TEST_CASE("allow trust", "[tx][allowtrust]")
