@@ -370,6 +370,9 @@ template <int V> struct TestStub
     static void
     testAllowTrust()
     {
+        TrustFlagOp flagOp = V == 0 ? TrustFlagOp::ALLOW_TRUST
+                                    : TrustFlagOp::SET_TRUST_LINE_FLAGS;
+
         auto const& cfg = getTestConfig();
 
         VirtualClock clock;
@@ -408,18 +411,18 @@ template <int V> struct TestStub
                 }
                 SECTION("do not set revocable flag")
                 {
-                    REQUIRE_THROWS_AS(gateway.allowTrust(idr, a1),
+                    REQUIRE_THROWS_AS(gateway.allowTrust(idr, a1, flagOp),
                                       ex_ALLOW_TRUST_NO_TRUST_LINE);
-                    REQUIRE_THROWS_AS(gateway.denyTrust(idr, a1),
+                    REQUIRE_THROWS_AS(gateway.denyTrust(idr, a1, flagOp),
                                       ex_ALLOW_TRUST_CANT_REVOKE);
                 }
                 SECTION("set revocable flag")
                 {
                     gateway.setOptions(setFlags(AUTH_REVOCABLE_FLAG));
 
-                    REQUIRE_THROWS_AS(gateway.allowTrust(idr, a1),
+                    REQUIRE_THROWS_AS(gateway.allowTrust(idr, a1, flagOp),
                                       ex_ALLOW_TRUST_NO_TRUST_LINE);
-                    REQUIRE_THROWS_AS(gateway.denyTrust(idr, a1),
+                    REQUIRE_THROWS_AS(gateway.denyTrust(idr, a1, flagOp),
                                       ex_ALLOW_TRUST_NO_TRUST_LINE);
                 }
             });
@@ -445,7 +448,7 @@ template <int V> struct TestStub
                         gateway.pay(a1, idr, trustLineStartingBalance),
                         ex_PAYMENT_NOT_AUTHORIZED);
 
-                    gateway.allowTrust(idr, a1);
+                    gateway.allowTrust(idr, a1, flagOp);
                     gateway.pay(a1, idr, trustLineStartingBalance);
                 }
                 SECTION("invalid authorization flag")
@@ -458,23 +461,23 @@ template <int V> struct TestStub
                 }
                 SECTION("do not set revocable flag")
                 {
-                    REQUIRE_THROWS_AS(gateway.denyTrust(idr, a1),
+                    REQUIRE_THROWS_AS(gateway.denyTrust(idr, a1, flagOp),
                                       ex_ALLOW_TRUST_CANT_REVOKE);
                     a1.pay(gateway, idr, trustLineStartingBalance);
 
-                    REQUIRE_THROWS_AS(gateway.denyTrust(idr, a1),
+                    REQUIRE_THROWS_AS(gateway.denyTrust(idr, a1, flagOp),
                                       ex_ALLOW_TRUST_CANT_REVOKE);
                 }
                 SECTION("set revocable flag")
                 {
                     gateway.setOptions(setFlags(AUTH_REVOCABLE_FLAG));
 
-                    gateway.denyTrust(idr, a1);
+                    gateway.denyTrust(idr, a1, flagOp);
                     REQUIRE_THROWS_AS(
                         a1.pay(gateway, idr, trustLineStartingBalance),
                         ex_PAYMENT_SRC_NOT_AUTHORIZED);
 
-                    gateway.allowTrust(idr, a1);
+                    gateway.allowTrust(idr, a1, flagOp);
                     a1.pay(gateway, idr, trustLineStartingBalance);
                 }
             });
@@ -499,9 +502,9 @@ template <int V> struct TestStub
                 });
 
                 for_versions_from(16, *app, [&] {
-                    REQUIRE_THROWS_AS(gateway.allowTrust(idr, gateway),
+                    REQUIRE_THROWS_AS(gateway.allowTrust(idr, gateway, flagOp),
                                       ex_ALLOW_TRUST_MALFORMED);
-                    REQUIRE_THROWS_AS(gateway.denyTrust(idr, gateway),
+                    REQUIRE_THROWS_AS(gateway.denyTrust(idr, gateway, flagOp),
                                       ex_ALLOW_TRUST_MALFORMED);
                 });
             }
@@ -527,10 +530,12 @@ template <int V> struct TestStub
                     });
 
                     for_versions_from(16, *app, [&] {
-                        REQUIRE_THROWS_AS(gateway.allowTrust(idr, gateway),
-                                          ex_ALLOW_TRUST_MALFORMED);
-                        REQUIRE_THROWS_AS(gateway.denyTrust(idr, gateway),
-                                          ex_ALLOW_TRUST_MALFORMED);
+                        REQUIRE_THROWS_AS(
+                            gateway.allowTrust(idr, gateway, flagOp),
+                            ex_ALLOW_TRUST_MALFORMED);
+                        REQUIRE_THROWS_AS(
+                            gateway.denyTrust(idr, gateway, flagOp),
+                            ex_ALLOW_TRUST_MALFORMED);
                     });
                 }
                 SECTION("set revocable flag")
@@ -550,10 +555,12 @@ template <int V> struct TestStub
                     });
 
                     for_versions_from(16, *app, [&] {
-                        REQUIRE_THROWS_AS(gateway.allowTrust(idr, gateway),
-                                          ex_ALLOW_TRUST_MALFORMED);
-                        REQUIRE_THROWS_AS(gateway.denyTrust(idr, gateway),
-                                          ex_ALLOW_TRUST_MALFORMED);
+                        REQUIRE_THROWS_AS(
+                            gateway.allowTrust(idr, gateway, flagOp),
+                            ex_ALLOW_TRUST_MALFORMED);
+                        REQUIRE_THROWS_AS(
+                            gateway.denyTrust(idr, gateway, flagOp),
+                            ex_ALLOW_TRUST_MALFORMED);
                     });
                 }
             }
@@ -571,7 +578,7 @@ template <int V> struct TestStub
                     gateway.setOptions(setFlags(toSet));
 
                     a1.changeTrust(idr, trustLineLimit);
-                    gateway.allowTrust(idr, a1);
+                    gateway.allowTrust(idr, a1, flagOp);
 
                     auto market = TestMarket{*app};
                     SECTION("buying asset matches")
@@ -582,7 +589,7 @@ template <int V> struct TestStub
                         });
                         market.requireChanges(
                             {{offer.key, OfferState::DELETED}},
-                            [&] { gateway.denyTrust(idr, a1); });
+                            [&] { gateway.denyTrust(idr, a1, flagOp); });
                     }
                     SECTION("selling asset matches")
                     {
@@ -594,7 +601,7 @@ template <int V> struct TestStub
                         });
                         market.requireChanges(
                             {{offer.key, OfferState::DELETED}},
-                            [&] { gateway.denyTrust(idr, a1); });
+                            [&] { gateway.denyTrust(idr, a1, flagOp); });
                     }
                 });
             }
@@ -610,13 +617,13 @@ template <int V> struct TestStub
                     auto cur2 = makeAsset(gateway, "CUR2");
 
                     a1.changeTrust(idr, trustLineLimit);
-                    gateway.allowTrust(idr, a1);
+                    gateway.allowTrust(idr, a1, flagOp);
 
                     a1.changeTrust(cur1, trustLineLimit);
-                    gateway.allowTrust(cur1, a1);
+                    gateway.allowTrust(cur1, a1, flagOp);
 
                     a1.changeTrust(cur2, trustLineLimit);
-                    gateway.allowTrust(cur2, a1);
+                    gateway.allowTrust(cur2, a1, flagOp);
 
                     gateway.pay(a1, cur1, trustLineStartingBalance);
 
@@ -627,7 +634,7 @@ template <int V> struct TestStub
                     });
                     market.requireChanges(
                         {{offer.key, {cur1, cur2, Price{1, 1}, 1000}}},
-                        [&] { gateway.denyTrust(idr, a1); });
+                        [&] { gateway.denyTrust(idr, a1, flagOp); });
                 });
             }
         }
