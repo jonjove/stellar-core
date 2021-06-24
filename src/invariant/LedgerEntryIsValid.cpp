@@ -108,6 +108,8 @@ LedgerEntryIsValid::checkIsValid(LedgerEntry const& le,
         return checkIsValid(le.data.data(), version);
     case CLAIMABLE_BALANCE:
         return checkIsValid(le, previous, version);
+    case LIQUIDITY_POOL:
+        return checkIsValid(le, previous, version);
     default:
         return "LedgerEntry has invalid type";
     }
@@ -366,6 +368,43 @@ LedgerEntryIsValid::checkIsValid(LedgerEntry const& le,
         }
     }
 
+    return {};
+}
+
+std::string
+LedgerEntryIsValid::checkIsValid(LiquidityPoolEntry const& lp,
+                                 uint32 version) const
+{
+    auto const cp = lp.body.constantProduct();
+    if (!isAssetValid(cp.params.assetA))
+    {
+        return "LiquidityPool assetA is invalid";
+    }
+    if (!isAssetValid(cp.params.assetB))
+    {
+        return "LiquidityPool assetB is invalid";
+    }
+    if (cp.params.fee != 30)
+    {
+        return "LiquidityPool fee is not 30 basis points";
+    }
+
+    if (cp.reserveA < 0)
+    {
+        return "LiquidityPool reserveA is negative";
+    }
+    if (cp.reserveB < 0)
+    {
+        return "LiquidityPool reserveB is negative";
+    }
+    if (cp.totalPoolShares < 0)
+    {
+        return "LiquidityPool totalPoolShares is negative";
+    }
+    if (cp.poolSharesTrustLineCount < 0)
+    {
+        return "LiquidityPool poolSharesTrustLineCount is negative";
+    }
     return {};
 }
 }
