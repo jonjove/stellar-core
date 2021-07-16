@@ -167,6 +167,7 @@ fi
 export ALL_VERSIONS=1
 export NUM_PARTITIONS=$((NPROCS*2))
 export RUN_PARTITIONS
+export TEST_SPEC="bucketmanager missing buckets fail,BucketList snap reaches steady state,messagelimiter,create offer,bigDivide 128bit by 64bit"
 ulimit -n 256
 time make check
 

@@ -12,8 +12,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        toolchain: [ "gcc", "clang"]
-        protocol: ["current", "next"]
+        toolchain: ["gcc"]
+        protocol: ["next"]
     steps:
       - name: Compute cache key
         # this step works around a limitation in actions/cache
