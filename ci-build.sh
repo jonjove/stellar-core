@@ -80,7 +80,6 @@ echo "PATH is $PATH"
 hash -r
 
 if test $CXX = 'clang++'; then
-    RUN_PARTITIONS=$(seq 0 $((NPROCS-1)))
     which clang-10
     ln -s `which clang-10` bin/clang
     which clang++-10
@@ -90,7 +89,6 @@ if test $CXX = 'clang++'; then
     clang -v
     llvm-symbolizer --version || true
 elif test $CXX = 'g++'; then
-    RUN_PARTITIONS=$(seq $NPROCS $((2*NPROCS-1)))
     which gcc-8
     ln -s `which gcc-8` bin/gcc
     which g++-8
@@ -165,8 +163,7 @@ if [ $TEMP_POSTGRES -eq 0 ] ; then
 fi
 
 export ALL_VERSIONS=1
-export NUM_PARTITIONS=$((NPROCS*2))
-export RUN_PARTITIONS
+export NUM_PARTITIONS=1
 export TEST_SPEC="bucketmanager missing buckets fail,BucketList snap reaches steady state,messagelimiter,create offer,bigDivide 128bit by 64bit"
 ulimit -n 256
 time make check
