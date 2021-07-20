@@ -65,5 +65,6 @@ jobs:
           echo Build with $CC and $CXX
           ./ci-build.sh --use-temp-db --protocol ${{ matrix.protocol }}
       - name: dmesg
+        if: ${{ always() }}
         run: |
           sudo dmesg
