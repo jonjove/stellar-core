@@ -64,4 +64,6 @@ jobs:
           fi
           echo Build with $CC and $CXX
           ./ci-build.sh --use-temp-db --protocol ${{ matrix.protocol }}
+      - name: dmesg
+        run: |
           sudo dmesg
